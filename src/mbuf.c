@@ -170,6 +170,40 @@ size_t mbuf_range_copy(uint8_t *dest, struct buf_ptr ptr[2], size_t max_len)
     return len;
 }
 
+size_t mbuf_strpos(struct buf_ptr ptr[2], char *str, int len)
+{
+    struct mbuf *b = ptr[0].buf;
+    size_t found = -1;
+    size_t pos = 0;
+    int offset = 0;
+    while (1) {
+        uint8_t *start = b->start;
+        uint8_t *end = b->end;
+        if (b == ptr[0].buf) {
+            start = ptr[0].pos;
+        }
+        if (b == ptr[1].buf) {
+            end = ptr[1].pos;
+        }
+        for (uint8_t *ch = start; ch < end; ch ++) {
+            if (*ch == str[offset]) {
+                offset ++;
+            } else {
+                offset = 0;
+            }
+            if (offset == len) {
+                found = pos - len - 1;
+                break;
+            }
+            pos ++;
+        }
+        if (b == ptr[1].buf)
+            break;
+        b = TAILQ_NEXT(b, next);
+    }
+    return found;
+}
+
 void mbuf_decref(struct context *ctx, struct mbuf **bufs, int n)
 {
     for (int i = 0; i < n; i++) {
