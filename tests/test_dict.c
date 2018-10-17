@@ -65,6 +65,12 @@ TEST(test_dict_delete) {
     char *a = dict_get(&dict, "bbbbb");
     ASSERT(a == NULL);
 
+    //set again
+    dict_set(&dict, "bbbbb", "5678");
+    a = dict_get(&dict, "bbbbb");
+    ASSERT(a != NULL);
+    ASSERT(strcmp(a, "5678") == 0);
+
     dict_free(&dict);
     PASS(NULL);
 }
