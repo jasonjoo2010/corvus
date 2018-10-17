@@ -7,6 +7,7 @@
 #include "logging.h"
 #include "socket.h"
 #include "slot.h"
+#include "client.h"
 
 #define SERVER_RETRY_TIMES 3
 #define SERVER_NULL -1
@@ -296,6 +297,16 @@ void server_ready(struct connection *self, uint32_t mask)
     if (mask & E_READABLE) {
         LOG(DEBUG, "server readable");
 
+        if (STAILQ_EMPTY(&info->waiting_queue) && self->binding != NULL) {
+            //when subscripting
+            //if is normal cmd response, copy it in read function
+            struct command *cmd = cmd_create(self->ctx);
+            cmd->cmd_count = 1;
+            cmd->client = self->binding;
+            cmd->server = self;
+            STAILQ_INSERT_HEAD(&info->waiting_queue, cmd, waiting_next);
+            STAILQ_INSERT_HEAD(&self->binding->info->cmd_queue, cmd, cmd_next);
+        }
         if (!STAILQ_EMPTY(&info->waiting_queue)) {
             switch (server_read(self)) {
                 case CORVUS_ERR:
@@ -320,8 +331,13 @@ struct connection *server_create(struct context *ctx, int fd)
     return server;
 }
 
-void server_eof(struct connection *server, const char *reason)
+static void server_eof_inner(struct connection *server, const char *reason, bool ignore_binded)
 {
+    if (server->eof) {
+        return;
+    }
+
+    server->eof = true;
     LOG(WARN, "server eof");
 
     struct command *c;
@@ -356,8 +372,29 @@ void server_eof(struct connection *server, const char *reason)
 
     event_deregister(&server->ctx->loop, server);
 
+    // binded client
+    bool should_create_job = !ignore_binded;
+    if (!ignore_binded && server->binding != NULL) {
+        if (!server->binding->eof)
+            client_eof(server->binding);
+
+        server->binding = NULL;
+        should_create_job = false;
+    }
+
     // drop all unsent requests
     cmd_iov_free(&server->info->iov);
     conn_free(server);
-    slot_create_job(SLOT_UPDATE);
+    if (should_create_job)
+        slot_create_job(SLOT_UPDATE);
+}
+
+void server_eof(struct connection *server, const char *reason)
+{
+    server_eof_inner(server, reason, false);
+}
+
+void server_eof_quit_binded(struct connection *server, const char *reason)
+{
+    server_eof_inner(server, reason, true);
 }

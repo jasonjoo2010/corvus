@@ -8,6 +8,7 @@
 #include "socket.h"
 #include "logging.h"
 #include "event.h"
+#include "server.h"
 
 #define CMD_MIN_LIMIT 64
 #define CMD_MAX_LIMIT 512
@@ -164,6 +165,14 @@ void client_make_iov(struct conn_info *info)
         }
         STAILQ_REMOVE_HEAD(&info->cmd_queue, cmd_next);
         STAILQ_NEXT(cmd, cmd_next) = NULL;
+
+        if (cmd->client->binding != NULL) {
+            if (cmd->reply_type == REP_INTEGER && cmd->integer_data == 0) {
+                server_eof_quit_binded(cmd->server, "-ERR End subscription\r\n");
+                cmd->client->binding = NULL;
+                LOG(DEBUG, "client quits listener mode");
+            }
+        }
 
         if (!info->quit) {
             cmd_make_iovec(cmd, &info->iov);
@@ -348,6 +357,11 @@ void client_eof(struct connection *client)
     client->eof = true;
 
     struct command *cmd;
+    // for binded client, close the server connection binded
+    if (client->binding != NULL) {
+        server_eof(client->binding, "-ERR connection closing\r\n");
+        client->binding = NULL;
+    }
     while (!STAILQ_EMPTY(&client->info->cmd_queue)) {
         cmd = STAILQ_FIRST(&client->info->cmd_queue);
         STAILQ_REMOVE_HEAD(&client->info->cmd_queue, cmd_next);

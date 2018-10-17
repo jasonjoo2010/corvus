@@ -66,6 +66,11 @@ TEST(test_mbuf_range_func) {
     ASSERT(memcmp(buf, "abcdefg012", 10) == 0);
     ASSERT(buf[10] == '\0');
 
+    // str_pos in three buf
+    ASSERT(mbuf_strpos(ptr, "9cr", 3) > 0);
+    ASSERT(mbuf_strpos(ptr, "123", 3) > 0);
+    ASSERT(mbuf_strpos(ptr, "ddd", 3) == -1);
+
     cv_free(b1.start);
     cv_free(b2.start);
     cv_free(b3.start);

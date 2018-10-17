@@ -26,6 +26,9 @@ struct connection {
 
     struct connection *ev;
     struct connection *parent;
+    // client <-> server binding relation,
+    // which the server conn can ONLY be used by binding client
+    struct connection *binding;
     bool event_triggered;
     bool eof;
     bool registered;
@@ -39,6 +42,9 @@ struct conn_info {
     int refcount;
 
     struct address addr;
+
+    // can be NULL(for subscribe/psubscribe)
+    // or other conditions ouside connection pool
     char dsn[ADDRESS_LEN + 1];
 
     struct reader reader;
@@ -86,6 +92,7 @@ void conn_buf_free(struct connection *conn);
 void conn_recycle(struct context *ctx, struct connection *conn);
 struct connection *conn_get_server_from_pool(struct context *ctx, struct address *addr, bool readonly);
 struct connection *conn_get_server(struct context *ctx, uint16_t slot, int access);
+struct connection *conn_get_server_without_pool(struct context *ctx, uint16_t slot, int access);
 struct mbuf *conn_get_buf(struct connection *conn, bool unprocessed, bool local);
 int conn_create_fd();
 int conn_register(struct connection *conn);

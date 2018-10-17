@@ -261,6 +261,40 @@ int cmd_forward_basic(struct command *cmd)
     return CORVUS_OK;
 }
 
+int cmd_forward_binded(struct command *cmd, struct redis_data *data)
+{
+    struct connection *server = NULL;
+    struct context *ctx = cmd->ctx;
+
+    if (cmd->client->binding == NULL) {
+        //random a slot to make a connection
+        int slot = rand_r(&cmd->ctx->seed) % REDIS_CLUSTER_SLOTS;
+        //enter block mode
+        server = conn_get_server_without_pool(ctx, slot, cmd->cmd_access);
+        cmd->client->binding = server;
+        server->binding = cmd->client;
+    } else {
+        server = cmd->client->binding;
+    }
+    if (server == NULL) {
+        LOG(ERROR, "cmd_forward_subscribe: fail to get server");
+        return CORVUS_ERR;
+    }
+    cmd->server = server;
+
+    server->info->last_active = time(NULL);
+
+    LOG(DEBUG, "command in subscripting ready");
+
+    STAILQ_INSERT_TAIL(&server->info->ready_queue, cmd, ready_next);
+    if (conn_register(server) == -1) {
+        LOG(ERROR, "cmd_forward_binded: fail to register server %d", server->fd);
+        /* cmd already marked failed in server_eof */
+        server_eof(server, rep_err);
+    }
+    return CORVUS_OK;
+}
+
 /* mget, del, exists */
 int cmd_forward_multikey(struct command *cmd, struct redis_data *data, const char *prefix)
 {
@@ -911,10 +945,20 @@ int cmd_forward(struct command *cmd, struct redis_data *data)
         return CORVUS_OK;
     }
 
+    if (cmd->client->binding != NULL
+            && cmd->request_type != CMD_BINDED
+            && cmd->cmd_type != CMD_PING
+            && cmd->cmd_type != CMD_QUIT) {
+        cmd_mark_fail(cmd, "-ERR Only binding group cmd can be submitted\r\n");
+        return CORVUS_OK;
+    }
+
     switch (cmd->request_type) {
         case CMD_BASIC:
             cmd->slot = cmd_get_slot(data);
             return cmd_forward_basic(cmd);
+        case CMD_BINDED:
+            return cmd_forward_binded(cmd, data);
         case CMD_COMPLEX:
             return cmd_forward_complex(cmd, data);
         case CMD_EXTRA:

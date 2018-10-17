@@ -91,8 +91,11 @@ static struct connection *conn_create_server(struct context *ctx,
         server->info->readonly = true;
     }
 
-    strncpy(info->dsn, key, ADDRESS_LEN);
-    dict_set(&ctx->server_table, info->dsn, (void*)server);
+    if (key) {
+        //store to pool when dsn(key) not empty
+        strncpy(info->dsn, key, ADDRESS_LEN);
+        dict_set(&ctx->server_table, info->dsn, (void*)server);
+    }
     TAILQ_INSERT_TAIL(&ctx->servers, server, next);
     return server;
 }
@@ -298,7 +301,7 @@ struct connection *conn_get_server_from_pool(struct context *ctx,
     return server;
 }
 
-struct connection *conn_get_raw_server(struct context *ctx)
+static struct connection *conn_get_raw_server(struct context *ctx)
 {
     int i;
     struct connection *server = NULL;
@@ -317,8 +320,8 @@ struct connection *conn_get_raw_server(struct context *ctx)
     return server;
 }
 
-struct connection *conn_get_server(struct context *ctx, uint16_t slot,
-        int access)
+static struct connection *conn_get_server_inner(struct context *ctx, uint16_t slot,
+        int access, bool from_pool)
 {
     struct address *addr;
     struct node_info info;
@@ -335,10 +338,25 @@ struct connection *conn_get_server(struct context *ctx, uint16_t slot,
             }
         }
         if (addr->port > 0) {
-            return conn_get_server_from_pool(ctx, addr, readonly);
+            if (from_pool) {
+                return conn_get_server_from_pool(ctx, addr, readonly);
+            }
+            return conn_create_server(ctx, addr, NULL, readonly);
         }
     }
     return conn_get_raw_server(ctx);
+}
+
+struct connection *conn_get_server_without_pool(struct context *ctx, uint16_t slot,
+        int access)
+{
+    return conn_get_server_inner(ctx, slot, access, false);
+}
+
+struct connection *conn_get_server(struct context *ctx, uint16_t slot,
+        int access)
+{
+    return conn_get_server_inner(ctx, slot, access, true);
 }
 
 /*

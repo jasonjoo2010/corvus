@@ -130,6 +130,13 @@
     HANDLER(ZSCORE,            BASIC,    READ)    \
     HANDLER(ZUNIONSTORE,       BASIC,    WRITE)   \
     HANDLER(ZSCAN,             BASIC,    READ)    \
+    /* pub/psub/sub */                            \
+    HANDLER(PUBLISH,           BASIC,    WRITE)   \
+    HANDLER(SUBSCRIBE,         BINDED,  READ)    \
+    HANDLER(UNSUBSCRIBE,       BINDED,  READ)    \
+    HANDLER(PSUBSCRIBE,        BINDED,  READ)    \
+    HANDLER(PUNSUBSCRIBE,      BINDED,  READ)    \
+    HANDLER(PUBSUB,            UNIMPL,   UNKNOWN) \
     /* hyperloglog */                             \
     HANDLER(PFADD,             BASIC,    WRITE)   \
     HANDLER(PFCOUNT,           BASIC,    READ)    \
@@ -160,6 +167,7 @@ enum {
     CMD_BASIC,
     CMD_COMPLEX,
     CMD_EXTRA,
+    CMD_BINDED,
 };
 
 struct context;
