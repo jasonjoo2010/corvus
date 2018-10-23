@@ -284,7 +284,7 @@ int cmd_forward_binded(struct command *cmd, struct redis_data *data)
 
     server->info->last_active = time(NULL);
 
-    LOG(DEBUG, "command in subscripting ready");
+    LOG(DEBUG, "command in subscribing ready");
 
     STAILQ_INSERT_TAIL(&server->info->ready_queue, cmd, ready_next);
     if (conn_register(server) == -1) {

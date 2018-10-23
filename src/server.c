@@ -298,7 +298,7 @@ void server_ready(struct connection *self, uint32_t mask)
         LOG(DEBUG, "server readable");
 
         if (STAILQ_EMPTY(&info->waiting_queue) && self->binding != NULL) {
-            //when subscripting
+            //when subscribing
             //if is normal cmd response, copy it in read function
             struct command *cmd = cmd_create(self->ctx);
             cmd->cmd_count = 1;
@@ -306,6 +306,7 @@ void server_ready(struct connection *self, uint32_t mask)
             cmd->server = self;
             STAILQ_INSERT_HEAD(&info->waiting_queue, cmd, waiting_next);
             STAILQ_INSERT_HEAD(&self->binding->info->cmd_queue, cmd, cmd_next);
+            LOG(DEBUG, "add new cmd under pubsub mode");
         }
         if (!STAILQ_EMPTY(&info->waiting_queue)) {
             switch (server_read(self)) {
@@ -331,9 +332,14 @@ struct connection *server_create(struct context *ctx, int fd)
     return server;
 }
 
-static void server_eof_inner(struct connection *server, const char *reason, bool ignore_binded)
+static void server_eof_inner(struct connection *server, const char *reason, bool update_slots)
 {
-    if (server->eof) {
+    if (server->binding != NULL) {
+        //for binded server, close client first when server conn breaks
+        LOG(DEBUG, "server error under subscribing, close client first");
+        struct connection *client = server->binding;
+        server->binding = NULL;
+        client_eof(client);
         return;
     }
 
@@ -372,29 +378,19 @@ static void server_eof_inner(struct connection *server, const char *reason, bool
 
     event_deregister(&server->ctx->loop, server);
 
-    // binded client
-    bool should_create_job = !ignore_binded;
-    if (!ignore_binded && server->binding != NULL) {
-        if (!server->binding->eof)
-            client_eof(server->binding);
-
-        server->binding = NULL;
-        should_create_job = false;
-    }
-
     // drop all unsent requests
     cmd_iov_free(&server->info->iov);
     conn_free(server);
-    if (should_create_job)
+    if (update_slots)
         slot_create_job(SLOT_UPDATE);
 }
 
 void server_eof(struct connection *server, const char *reason)
 {
-    server_eof_inner(server, reason, false);
+    server_eof_inner(server, reason, true);
 }
 
 void server_eof_quit_binded(struct connection *server, const char *reason)
 {
-    server_eof_inner(server, reason, true);
+    server_eof_inner(server, reason, false);
 }
